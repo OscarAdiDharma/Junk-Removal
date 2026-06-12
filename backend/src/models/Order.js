@@ -9,7 +9,8 @@ const itemSchema = new mongoose.Schema({
   },
   name: { type: String, required: true },
   quantity: { type: Number, default: 1 },
-  weight: { type: Number }, // in kg
+  weight: { type: Number }, // in kg (legacy)
+  weightKg: { type: Number, default: 0 }, // AI-estimated weight
   dimensions: {
     length: Number,
     width: Number,
@@ -23,6 +24,11 @@ const itemSchema = new mongoose.Schema({
   notes: { type: String },
   photo: { type: String, default: null },
   estimatedPrice: { type: Number, default: 0 },
+  photoAnalysis: {
+    estimatedWeightKg: { type: Number },
+    confidence: { type: String, enum: ['low', 'medium', 'high'] },
+    description: { type: String },
+  },
 });
 
 const orderSchema = new mongoose.Schema(
@@ -92,8 +98,10 @@ const orderSchema = new mongoose.Schema(
     pricing: {
       basePrice: { type: Number, default: 0 },
       itemsTotal: { type: Number, default: 0 },
+      platformFee: { type: Number, default: 0 },
       distanceFee: { type: Number, default: 0 },
       discount: { type: Number, default: 0 },
+      tax: { type: Number, default: 0 }, // 10% pajak
       total: { type: Number, required: true },
     },
     payment: {

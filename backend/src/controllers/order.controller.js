@@ -2,19 +2,31 @@ const Order = require('../models/Order');
 
 // Pricing configuration
 const PRICING_CONFIG = {
-  basePrice: 50000,
-  itemPrices: {
-    sofa: 75000,
-    kasur: 60000,
-    lemari: 85000,
-    elektronik: 50000,
-    meja: 40000,
-    kursi: 30000,
-    kulkas: 90000,
-    mesin_cuci: 80000,
-    lainnya: 35000,
+  basePackageKg: 10,            // Paket standard: 10 kg pertama
+  basePackagePrice: 200000,     // Harga flat paket standard
+  excessPricePerKg: 15000,      // Rp 15.000 per kg kelebihan
+  platformFee: 0.20,            // Margin keuntungan 20%
+  // Default weight (kg) per kategori
+  defaultWeights: {
+    sofa: 45,
+    kasur: 25,
+    lemari: 60,
+    elektronik: 15,
+    meja: 20,
+    kursi: 8,
+    kulkas: 55,
+    mesin_cuci: 50,
+    lainnya: 20,
   },
-  distancePerKm: 5000,
+};
+
+// Hitung harga dasar berdasarkan total berat pesanan
+const calcOrderBasePrice = (totalWeightKg) => {
+  if (totalWeightKg <= PRICING_CONFIG.basePackageKg) {
+    return PRICING_CONFIG.basePackagePrice; // flat 200k untuk ≤10kg
+  }
+  const excessKg = totalWeightKg - PRICING_CONFIG.basePackageKg;
+  return PRICING_CONFIG.basePackagePrice + excessKg * PRICING_CONFIG.excessPricePerKg;
 };
 
 /**
@@ -29,21 +41,32 @@ const getEstimate = async (req, res) => {
     return res.status(400).json({ success: false, message: 'Items tidak boleh kosong' });
   }
 
-  let itemsTotal = 0;
+  // Hitung total berat semua item
+  let totalWeightKg = 0;
   const detailedItems = items.map((item) => {
-    const price = PRICING_CONFIG.itemPrices[item.category] || PRICING_CONFIG.itemPrices.lainnya;
-    const subtotal = price * (item.quantity || 1);
-    itemsTotal += subtotal;
-    return { ...item, unitPrice: price, subtotal };
+    const weightKg = item.weightKg || PRICING_CONFIG.defaultWeights[item.category] || 20;
+    const qty = item.quantity || 1;
+    totalWeightKg += weightKg * qty;
+    return { ...item, weightKg, quantity: qty };
   });
 
-  const total = PRICING_CONFIG.basePrice + itemsTotal;
+  // Kalkulasi paket bertingkat
+  const excessKg = Math.max(0, totalWeightKg - PRICING_CONFIG.basePackageKg);
+  const baseAmount = calcOrderBasePrice(totalWeightKg);
+  const platformFee = Math.round(baseAmount * PRICING_CONFIG.platformFee);
+  const total = baseAmount + platformFee;
 
   res.json({
     success: true,
     data: {
-      basePrice: PRICING_CONFIG.basePrice,
-      itemsTotal,
+      totalWeightKg,
+      basePackageKg: PRICING_CONFIG.basePackageKg,
+      basePackagePrice: PRICING_CONFIG.basePackagePrice,
+      excessKg,
+      excessPrice: excessKg * PRICING_CONFIG.excessPricePerKg,
+      excessPricePerKg: PRICING_CONFIG.excessPricePerKg,
+      platformFee,
+      platformFeeRate: PRICING_CONFIG.platformFee,
       total,
       items: detailedItems,
     },
@@ -59,21 +82,32 @@ const createOrder = async (req, res, next) => {
   try {
     const { items, pickupAddress, scheduledDate, scheduledTime, paymentMethod, notes } = req.body;
 
-    // Calculate pricing
-    let itemsTotal = 0;
+    // Hitung total berat semua item pesanan
+    let totalWeightKg = 0;
     const pricedItems = items.map((item) => {
-      const price = PRICING_CONFIG.itemPrices[item.category] || PRICING_CONFIG.itemPrices.lainnya;
-      const subtotal = price * (item.quantity || 1);
-      itemsTotal += subtotal;
-      return { ...item, estimatedPrice: subtotal };
+      const weightKg = item.weightKg || PRICING_CONFIG.defaultWeights[item.category] || 20;
+      const qty = item.quantity || 1;
+      totalWeightKg += weightKg * qty;
+      return {
+        ...item,
+        weightKg,
+        estimatedPrice: 0, // harga dihitung di level pesanan
+        photoAnalysis: item.photoAnalysis || null,
+      };
     });
 
+    // Kalkulasi paket bertingkat berdasarkan total berat
+    const excessKg = Math.max(0, totalWeightKg - PRICING_CONFIG.basePackageKg);
+    const baseAmount = calcOrderBasePrice(totalWeightKg);
+    const platformFee = Math.round(baseAmount * PRICING_CONFIG.platformFee);
     const pricing = {
-      basePrice: PRICING_CONFIG.basePrice,
-      itemsTotal,
+      basePrice: PRICING_CONFIG.basePackagePrice,
+      itemsTotal: excessKg * PRICING_CONFIG.excessPricePerKg,
+      platformFee,
       distanceFee: 0,
       discount: 0,
-      total: PRICING_CONFIG.basePrice + itemsTotal,
+      tax: 0,
+      total: baseAmount + platformFee,
     };
 
     const order = await Order.create({
@@ -409,6 +443,69 @@ const getAnalytics = async (req, res, next) => {
   }
 };
 
+/**
+ * @desc    Update actual weight after driver weighing (admin)
+ * @route   PATCH /api/admin/orders/:id/actual-weight
+ * @access  Private (admin)
+ */
+const updateActualWeight = async (req, res, next) => {
+  try {
+    const { items } = req.body; // [{ itemIndex, actualWeightKg }]
+
+    if (!items || !Array.isArray(items)) {
+      return res.status(400).json({ success: false, message: 'Data berat tidak valid' });
+    }
+
+    const order = await Order.findById(req.params.id);
+    if (!order) return res.status(404).json({ success: false, message: 'Pesanan tidak ditemukan' });
+
+    // Update weight pada masing-masing item
+    items.forEach(({ itemIndex, actualWeightKg }) => {
+      if (order.items[itemIndex] !== undefined) {
+        const kg = Math.max(1, parseFloat(actualWeightKg) || 1);
+        order.items[itemIndex].weightKg = kg;
+        order.items[itemIndex].estimatedPrice = 0; // harga tidak lagi per-item
+      }
+    });
+
+    // Hitung ulang total berat
+    let totalWeightKg = 0;
+    order.items.forEach((item) => {
+      totalWeightKg += (item.weightKg || 20) * (item.quantity || 1);
+    });
+
+    // Hitung ulang harga paket
+    const excessKg = Math.max(0, totalWeightKg - PRICING_CONFIG.basePackageKg);
+    const baseAmount = calcOrderBasePrice(totalWeightKg);
+    const platformFee = Math.round(baseAmount * PRICING_CONFIG.platformFee);
+
+    order.pricing.basePrice = PRICING_CONFIG.basePackagePrice;
+    order.pricing.itemsTotal = excessKg * PRICING_CONFIG.excessPricePerKg;
+    order.pricing.platformFee = platformFee;
+    order.pricing.total = baseAmount + platformFee + (order.pricing.distanceFee || 0) - (order.pricing.discount || 0);
+
+    order.statusHistory.push({
+      status: order.status,
+      note: 'Berat aktual diperbarui oleh admin setelah penimbangan',
+      updatedBy: 'admin',
+    });
+
+    await order.save();
+
+    const updated = await Order.findById(order._id)
+      .populate('customer', 'name email phone')
+      .populate('driver', 'name phone vehicle');
+
+    res.json({
+      success: true,
+      message: 'Berat aktual dan harga berhasil diperbarui',
+      data: { order: updated },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getEstimate,
   createOrder,
@@ -419,4 +516,5 @@ module.exports = {
   updateOrderStatus,
   assignDriver,
   getAnalytics,
+  updateActualWeight,
 };

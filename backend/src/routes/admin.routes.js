@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { protect, authorize } = require('../middleware/auth');
-const { getAllOrders, updateOrderStatus, assignDriver, getAnalytics } = require('../controllers/order.controller');
+const { getAllOrders, updateOrderStatus, assignDriver, getAnalytics, updateActualWeight } = require('../controllers/order.controller');
 const { getAllDrivers, createDriver, updateDriver, deleteDriver, getAvailableDrivers } = require('../controllers/driver.controller');
 const { getAllUsers, toggleUserStatus } = require('../controllers/user.controller');
 
@@ -15,6 +15,7 @@ router.get('/analytics', getAnalytics);
 router.get('/orders', getAllOrders);
 router.patch('/orders/:id/status', updateOrderStatus);
 router.patch('/orders/:id/assign', assignDriver);
+router.patch('/orders/:id/actual-weight', updateActualWeight);
 
 // Drivers
 router.get('/drivers', getAllDrivers);

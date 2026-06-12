@@ -122,27 +122,61 @@ const seedData = async () => {
       },
     ]);
 
-    // Create sample orders
-    const statuses = ['pending', 'confirmed', 'assigned', 'completed', 'completed', 'completed'];
-    const itemCategories = ['sofa', 'kasur', 'lemari', 'elektronik', 'meja', 'kulkas'];
+    // Pricing helper (sesuai PRICING_CONFIG baru: paket bertingkat)
+    const BASE_PACKAGE_KG = 10;
+    const BASE_PACKAGE_PRICE = 200000;
+    const EXCESS_PRICE_PER_KG = 15000;
+    const PLATFORM_FEE_RATE = 0.20;
+    const defaultWeights = {
+      sofa: 45, kasur: 25, lemari: 60, elektronik: 15,
+      meja: 20, kulkas: 55, mesin_cuci: 50, lainnya: 20,
+    };
+    const calcOrderPrice = (totalWeightKg) => {
+      const base = totalWeightKg <= BASE_PACKAGE_KG
+        ? BASE_PACKAGE_PRICE
+        : BASE_PACKAGE_PRICE + (totalWeightKg - BASE_PACKAGE_KG) * EXCESS_PRICE_PER_KG;
+      const fee = Math.round(base * PLATFORM_FEE_RATE);
+      return { base, fee, total: base + fee, excessKg: Math.max(0, totalWeightKg - BASE_PACKAGE_KG) };
+    };
+
+    // Variasi pesanan yang lebih realistis
+    const orderTemplates = [
+      { category: 'sofa',       name: 'Sofa',          qty: 1, status: 'completed',  scheduledTime: '08:00 - 11:00' },
+      { category: 'kasur',      name: 'Kasur',          qty: 2, status: 'completed',  scheduledTime: '09:00 - 12:00' },
+      { category: 'lemari',     name: 'Lemari',         qty: 1, status: 'completed',  scheduledTime: '10:00 - 13:00' },
+      { category: 'elektronik', name: 'Elektronik',     qty: 1, status: 'confirmed',  scheduledTime: '13:00 - 16:00' },
+      { category: 'kulkas',     name: 'Kulkas',         qty: 1, status: 'assigned',   scheduledTime: '14:00 - 17:00' },
+      { category: 'meja',       name: 'Meja',           qty: 2, status: 'pending',    scheduledTime: '09:00 - 12:00' },
+      { category: 'mesin_cuci', name: 'Mesin Cuci',     qty: 1, status: 'completed',  scheduledTime: '08:00 - 11:00' },
+      { category: 'sofa',       name: 'Sofa',           qty: 2, status: 'completed',  scheduledTime: '11:00 - 14:00' },
+      { category: 'lainnya',    name: 'Barang Lainnya', qty: 3, status: 'pending',    scheduledTime: '15:00 - 18:00' },
+      { category: 'kasur',      name: 'Kasur',          qty: 1, status: 'confirmed',  scheduledTime: '10:00 - 13:00' },
+      { category: 'lemari',     name: 'Lemari',         qty: 2, status: 'completed',  scheduledTime: '07:00 - 10:00' },
+      { category: 'elektronik', name: 'Elektronik',     qty: 2, status: 'assigned',   scheduledTime: '16:00 - 19:00' },
+    ];
 
     const orders = [];
-    for (let i = 0; i < 12; i++) {
-      const status = statuses[i % statuses.length];
+    for (let i = 0; i < orderTemplates.length; i++) {
+      const t = orderTemplates[i];
       const customer = customers[i % customers.length];
       const baseDate = new Date();
       baseDate.setDate(baseDate.getDate() - Math.floor(Math.random() * 30));
 
+      const itemWeightKg = defaultWeights[t.category] || 20;
+      const totalWeightKg = itemWeightKg * t.qty;
+      const { base, fee, total, excessKg } = calcOrderPrice(totalWeightKg);
+
       orders.push({
         customer: customer._id,
-        driver: status !== 'pending' ? drivers[i % drivers.length]._id : null,
+        driver: t.status !== 'pending' ? drivers[i % drivers.length]._id : null,
         items: [
           {
-            category: itemCategories[i % itemCategories.length],
-            name: itemCategories[i % itemCategories.length].charAt(0).toUpperCase() + itemCategories[i % itemCategories.length].slice(1),
-            quantity: Math.floor(Math.random() * 2) + 1,
+            category: t.category,
+            name: t.name,
+            quantity: t.qty,
             condition: 'baik',
-            estimatedPrice: 60000 + (i * 5000),
+            weightKg: defaultWeights[t.category] || 20,
+            estimatedPrice: 0,
           },
         ],
         pickupAddress: {
@@ -152,20 +186,22 @@ const seedData = async () => {
           contactPhone: customer.phone,
         },
         scheduledDate: baseDate,
-        scheduledTime: '09:00 - 12:00',
-        status,
+        scheduledTime: t.scheduledTime,
+        status: t.status,
         statusHistory: [{ status: 'pending', note: 'Pesanan dibuat', updatedBy: 'customer' }],
         pricing: {
-          basePrice: 50000,
-          itemsTotal: 60000 + (i * 5000),
+          basePrice: BASE_PACKAGE_PRICE,
+          itemsTotal: excessKg * EXCESS_PRICE_PER_KG,
+          platformFee: fee,
           distanceFee: 0,
           discount: 0,
-          total: 110000 + (i * 5000),
+          tax: 0,
+          total,
         },
         payment: {
           method: ['cash', 'transfer', 'qris'][i % 3],
-          status: status === 'completed' ? 'paid' : 'pending',
-          paidAt: status === 'completed' ? new Date() : null,
+          status: t.status === 'completed' ? 'paid' : 'pending',
+          paidAt: t.status === 'completed' ? new Date() : null,
         },
         createdAt: baseDate,
       });

@@ -35,7 +35,7 @@ const register = async (req, res, next) => {
 };
 
 /**
- * @desc    Login user
+ * @desc    Unified login (customer, driver, admin — auto detect)
  * @route   POST /api/auth/login
  * @access  Public
  */
@@ -43,16 +43,64 @@ const login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
-    // Get user with password
+    // 1. Cek di koleksi User (customer & admin)
     const user = await User.findOne({ email }).select('+password');
-    if (!user) {
+    if (user) {
+      const isMatch = await user.comparePassword(password);
+      if (!isMatch) return res.status(401).json({ success: false, message: 'Email atau password salah' });
+      if (!user.isActive) return res.status(403).json({ success: false, message: 'Akun Anda telah dinonaktifkan' });
+
+      user.lastLogin = new Date();
+      await user.save({ validateBeforeSave: false });
+
+      const token = generateToken(user._id, user.role);
+      return res.json({
+        success: true,
+        message: 'Login berhasil',
+        data: { user, token, role: user.role },
+      });
+    }
+
+    // 2. Cek di koleksi Driver
+    const driver = await Driver.findOne({ email }).select('+password');
+    if (driver) {
+      const isMatch = await driver.comparePassword(password);
+      if (!isMatch) return res.status(401).json({ success: false, message: 'Email atau password salah' });
+      if (!driver.isActive) return res.status(403).json({ success: false, message: 'Akun driver telah dinonaktifkan' });
+
+      const token = generateToken(driver._id, 'driver');
+      return res.json({
+        success: true,
+        message: 'Login driver berhasil',
+        data: { user: driver, token, role: 'driver' },
+      });
+    }
+
+    // 3. Tidak ditemukan
+    return res.status(401).json({ success: false, message: 'Email atau password salah' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Login driver
+ * @route   POST /api/auth/driver/login
+ * @access  Public
+ */
+const driverLogin = async (req, res, next) => {
+  try {
+    const { email, password } = req.body;
+
+    const driver = await Driver.findOne({ email }).select('+password');
+    if (!driver) {
       return res.status(401).json({
         success: false,
         message: 'Email atau password salah',
       });
     }
 
-    const isMatch = await user.comparePassword(password);
+    const isMatch = await driver.comparePassword(password);
     if (!isMatch) {
       return res.status(401).json({
         success: false,
@@ -60,23 +108,19 @@ const login = async (req, res, next) => {
       });
     }
 
-    if (!user.isActive) {
+    if (!driver.isActive) {
       return res.status(403).json({
         success: false,
-        message: 'Akun Anda telah dinonaktifkan',
+        message: 'Akun driver telah dinonaktifkan',
       });
     }
 
-    // Update last login
-    user.lastLogin = new Date();
-    await user.save({ validateBeforeSave: false });
-
-    const token = generateToken(user._id, user.role);
+    const token = generateToken(driver._id, 'driver');
 
     res.json({
       success: true,
-      message: 'Login berhasil',
-      data: { user, token },
+      message: 'Login driver berhasil',
+      data: { user: driver, token, role: 'driver' },
     });
   } catch (error) {
     next(error);
@@ -208,4 +252,4 @@ const deleteAddress = async (req, res, next) => {
   }
 };
 
-module.exports = { register, login, adminLogin, getMe, updateProfile, addAddress, deleteAddress };
+module.exports = { register, login, driverLogin, adminLogin, getMe, updateProfile, addAddress, deleteAddress };

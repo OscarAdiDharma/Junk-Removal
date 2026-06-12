@@ -17,6 +17,8 @@ export default function AdminOrders() {
   const [drivers, setDrivers] = useState([]);
   const [showAssign, setShowAssign] = useState(null);
   const [pagination, setPagination] = useState({ total: 0, page: 1, pages: 1 });
+  const [weightInputs, setWeightInputs] = useState({}); // { itemIndex: kg }
+  const [savingWeight, setSavingWeight] = useState(false);
 
   const loadOrders = useCallback(async () => {
     setLoading(true);
@@ -52,6 +54,39 @@ export default function AdminOrders() {
       setShowAssign(null);
       loadOrders();
     } catch { toast.error('Gagal menugaskan driver'); }
+  };
+
+  const handleWeightInputChange = (itemIndex, val) => {
+    setWeightInputs((prev) => ({ ...prev, [itemIndex]: val }));
+  };
+
+  const saveActualWeights = async () => {
+    if (!selectedOrder) return;
+    setSavingWeight(true);
+    try {
+      const items = Object.entries(weightInputs).map(([idx, kg]) => ({
+        itemIndex: parseInt(idx),
+        actualWeightKg: parseFloat(kg),
+      }));
+      const res = await adminAPI.updateActualWeight(selectedOrder._id, { items });
+      setSelectedOrder(res.data.data.order);
+      toast.success('Berat aktual & harga berhasil diperbarui! ⚖️');
+      loadOrders();
+      setWeightInputs({});
+    } catch { toast.error('Gagal menyimpan berat aktual'); } finally { setSavingWeight(false); }
+  };
+
+  // Init weight inputs saat order dipilih
+  const selectOrder = (order) => {
+    if (selectedOrder?._id === order._id) {
+      setSelectedOrder(null);
+      setWeightInputs({});
+    } else {
+      setSelectedOrder(order);
+      const init = {};
+      order.items?.forEach((item, idx) => { init[idx] = item.weightKg || 20; });
+      setWeightInputs(init);
+    }
   };
 
   const filtered = orders.filter(o =>
@@ -96,7 +131,7 @@ export default function AdminOrders() {
                   </tr></thead>
                   <tbody>
                     {filtered.map(order => (
-                      <tr key={order._id} onClick={() => setSelectedOrder(selectedOrder?._id === order._id ? null : order)} style={{ cursor: 'pointer', background: selectedOrder?._id === order._id ? 'rgba(249,115,22,0.05)' : '' }}>
+                      <tr key={order._id} onClick={() => selectOrder(order)} style={{ cursor: 'pointer', background: selectedOrder?._id === order._id ? 'rgba(249,115,22,0.05)' : '' }}>
                         <td><span style={{ fontWeight: '700', fontSize: '13px', color: 'var(--primary)' }}>{order.orderNumber}</span></td>
                         <td>
                           <div style={{ fontWeight: '600', fontSize: '13px' }}>{order.customer?.name}</div>
@@ -154,16 +189,51 @@ export default function AdminOrders() {
                     </div>
                   ))}
                   <div style={{ marginTop: '12px' }}>
-                    <div style={{ color: 'var(--text-muted)', marginBottom: '8px' }}>Barang:</div>
+                    <div style={{ color: 'var(--text-muted)', marginBottom: '8px', fontSize: '13px', fontWeight: '600' }}>Barang & Berat:</div>
                     {selectedOrder.items?.map((item, i) => (
-                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '4px' }}>
-                        <span>{item.name} ×{item.quantity}</span>
-                        <span style={{ color: 'var(--primary)' }}>{fmtCurrency(item.estimatedPrice)}</span>
+                      <div key={i} style={{ marginBottom: '10px', padding: '10px', background: 'var(--bg-800)', borderRadius: '8px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                          <span style={{ fontSize: '13px', fontWeight: '600' }}>{item.name} ×{item.quantity}</span>
+                          <span style={{ color: 'var(--primary)', fontSize: '13px', fontWeight: '700' }}>{fmtCurrency(item.estimatedPrice)}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontSize: '12px', color: 'var(--text-muted)', flex: 1 }}>Berat aktual (kg):</span>
+                          <input
+                            type="number" min="1" step="0.5"
+                            value={weightInputs[i] ?? item.weightKg ?? 20}
+                            onChange={(e) => handleWeightInputChange(i, e.target.value)}
+                            style={{ width: '65px', padding: '4px 6px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--bg-900)', color: 'var(--text-primary)', fontSize: '13px', fontWeight: '700', textAlign: 'right' }}
+                          />
+                          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>kg</span>
+                        </div>
                       </div>
                     ))}
-                    <div style={{ borderTop: '1px solid var(--border)', marginTop: '8px', paddingTop: '8px', display: 'flex', justifyContent: 'space-between', fontWeight: '700' }}>
-                      <span>Total</span>
-                      <span style={{ color: 'var(--primary)' }}>{fmtCurrency(selectedOrder.pricing?.total)}</span>
+                    <button
+                      onClick={saveActualWeights}
+                      disabled={savingWeight}
+                      className="btn btn-primary"
+                      style={{ width: '100%', marginBottom: '8px' }}
+                    >
+                      {savingWeight ? 'Menyimpan...' : '⚖️ Simpan Berat Aktual & Hitung Ulang Harga'}
+                    </button>
+                    <div style={{ borderTop: '1px solid var(--border)', paddingTop: '10px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                        <span>📦 Paket Standard (≤10 kg)</span><span>{fmtCurrency(selectedOrder.pricing?.basePrice)}</span>
+                      </div>
+                      {selectedOrder.pricing?.itemsTotal > 0 && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                          <span>⚖️ Biaya kelebihan muatan</span><span>{fmtCurrency(selectedOrder.pricing?.itemsTotal)}</span>
+                        </div>
+                      )}
+                      {selectedOrder.pricing?.platformFee > 0 && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                          <span>🏷️ Biaya layanan (20%)</span><span>{fmtCurrency(selectedOrder.pricing?.platformFee)}</span>
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: '700', paddingTop: '6px', borderTop: '1px solid var(--border)' }}>
+                        <span>Total Final</span>
+                        <span style={{ color: 'var(--primary)', fontSize: '16px' }}>{fmtCurrency(selectedOrder.pricing?.total)}</span>
+                      </div>
                     </div>
                   </div>
                 </div>

@@ -22,8 +22,8 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <Toaster position="top-right" toastOptions={{
-          style: { background: '#1e293b', color: '#f1f5f9', border: '1px solid #334155' },
-          success: { iconTheme: { primary: '#22c55e', secondary: '#fff' } },
+          style: { background: '#fff', color: '#14532d', border: '1px solid #d1fae5', boxShadow: '0 4px 16px rgba(22,163,74,0.12)' },
+          success: { iconTheme: { primary: '#16a34a', secondary: '#fff' } },
           error: { iconTheme: { primary: '#ef4444', secondary: '#fff' } },
         }} />
         <Routes>

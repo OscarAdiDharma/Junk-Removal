@@ -79,14 +79,33 @@ export default function OrderDetail() {
             <h4 style={{ fontWeight: '700', margin: '20px 0 12px' }}>Barang</h4>
             {order.items.map((item, i) => (
               <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid rgba(51,65,85,0.3)', fontSize: '14px' }}>
-                <span>{item.name} ×{item.quantity}</span>
-                <span style={{ color: 'var(--primary)', fontWeight: '600' }}>{fmtCurrency(item.estimatedPrice)}</span>
+                <span>{item.name} ×{item.quantity} <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>({item.weightKg * item.quantity} kg)</span></span>
+                <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>kontribusi berat</span>
               </div>
             ))}
 
-            <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontWeight: '700' }}>Total</span>
-              <span style={{ fontSize: '22px', fontWeight: '800', color: 'var(--primary)' }}>{fmtCurrency(order.pricing.total)}</span>
+            {/* Rincian harga paket */}
+            <div style={{ marginTop: '16px', padding: '14px', background: 'var(--primary-xlight)', borderRadius: '10px', border: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                <span>📦 Paket Standard (≤10 kg)</span>
+                <span>{fmtCurrency(order.pricing.basePrice)}</span>
+              </div>
+              {order.pricing.itemsTotal > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                  <span>⚖️ Biaya kelebihan muatan</span>
+                  <span>{fmtCurrency(order.pricing.itemsTotal)}</span>
+                </div>
+              )}
+              {order.pricing.platformFee > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '10px' }}>
+                  <span>🏷️ Biaya layanan (20%)</span>
+                  <span>{fmtCurrency(order.pricing.platformFee)}</span>
+                </div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border)', paddingTop: '10px' }}>
+                <span style={{ fontWeight: '700' }}>Total</span>
+                <span style={{ fontSize: '22px', fontWeight: '800', color: 'var(--primary)' }}>{fmtCurrency(order.pricing.total)}</span>
+              </div>
             </div>
           </div>
         </div>

@@ -16,13 +16,14 @@ export const AuthProvider = ({ children }) => {
     setLoading(false);
   }, []);
 
-  const login = async (data, isAdmin = false) => {
-    const res = isAdmin ? await authAPI.adminLogin(data) : await authAPI.login(data);
-    const { user, token } = res.data.data;
+  const login = async (data) => {
+    const res = await authAPI.login(data);
+    const { user, token, role } = res.data.data;
+    const userWithRole = { ...user, role: role || user.role };
     localStorage.setItem('ac_token', token);
-    localStorage.setItem('ac_user', JSON.stringify(user));
-    setUser(user);
-    return user;
+    localStorage.setItem('ac_user', JSON.stringify(userWithRole));
+    setUser(userWithRole);
+    return userWithRole;
   };
 
   const register = async (data) => {

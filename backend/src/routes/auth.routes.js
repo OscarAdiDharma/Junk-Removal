@@ -4,6 +4,7 @@ const { protect } = require('../middleware/auth');
 const {
   register,
   login,
+  driverLogin,
   adminLogin,
   getMe,
   updateProfile,
@@ -13,6 +14,7 @@ const {
 
 router.post('/register', register);
 router.post('/login', login);
+router.post('/driver/login', driverLogin);
 router.post('/admin/login', adminLogin);
 router.get('/me', protect, getMe);
 router.put('/profile', protect, updateProfile);

@@ -24,6 +24,7 @@ API.interceptors.response.use(
 export const authAPI = {
   register: (data) => API.post('/auth/register', data),
   login: (data) => API.post('/auth/login', data),
+  driverLogin: (data) => API.post('/auth/driver/login', data),
   adminLogin: (data) => API.post('/auth/admin/login', data),
   getMe: () => API.get('/auth/me'),
   updateProfile: (data) => API.put('/auth/profile', data),
@@ -40,12 +41,18 @@ export const orderAPI = {
   rate: (id, data) => API.post(`/orders/${id}/rate`, data),
 };
 
+// AI
+export const aiAPI = {
+  analyzePhoto: (data) => API.post('/ai/analyze-photo', data),
+};
+
 // Admin
 export const adminAPI = {
   getAnalytics: () => API.get('/admin/analytics'),
   getOrders: (params) => API.get('/admin/orders', { params }),
   updateOrderStatus: (id, data) => API.patch(`/admin/orders/${id}/status`, data),
   assignDriver: (id, data) => API.patch(`/admin/orders/${id}/assign`, data),
+  updateActualWeight: (id, data) => API.patch(`/admin/orders/${id}/actual-weight`, data),
   getDrivers: (params) => API.get('/admin/drivers', { params }),
   getAvailableDrivers: () => API.get('/admin/drivers/available'),
   createDriver: (data) => API.post('/admin/drivers', data),

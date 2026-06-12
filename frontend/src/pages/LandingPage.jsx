@@ -2,15 +2,19 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { orderAPI } from '../services/api';
 
+const FLAT_KG = 10;           // Paket flat 10 kg pertama
+const FLAT_PRICE = 200000;    // Rp 200.000 flat
+const FEE_RATE = 0.20;        // 20% biaya layanan
+
 const ITEMS = [
-  { key: 'sofa', label: 'Sofa', icon: '🛋️', price: 75000 },
-  { key: 'kasur', label: 'Kasur', icon: '🛏️', price: 60000 },
-  { key: 'lemari', label: 'Lemari', icon: '🚪', price: 85000 },
-  { key: 'elektronik', label: 'Elektronik', icon: '📺', price: 50000 },
-  { key: 'meja', label: 'Meja', icon: '🪑', price: 40000 },
-  { key: 'kulkas', label: 'Kulkas', icon: '🧊', price: 90000 },
-  { key: 'mesin_cuci', label: 'Mesin Cuci', icon: '🫧', price: 80000 },
-  { key: 'lainnya', label: 'Lainnya', icon: '📦', price: 35000 },
+  { key: 'sofa',       label: 'Sofa',       icon: '🛋️' },
+  { key: 'kasur',      label: 'Kasur',      icon: '🛏️' },
+  { key: 'lemari',     label: 'Lemari',     icon: '🚪' },
+  { key: 'elektronik', label: 'Elektronik', icon: '📺' },
+  { key: 'meja',       label: 'Meja',       icon: '🪑' },
+  { key: 'kulkas',     label: 'Kulkas',     icon: '🧊' },
+  { key: 'mesin_cuci', label: 'Mesin Cuci', icon: '🫧' },
+  { key: 'lainnya',    label: 'Lainnya',    icon: '📦' },
 ];
 
 const STATUS_MAP = {
@@ -38,7 +42,10 @@ export default function LandingPage() {
     setSelected(newSelected);
     if (newSelected.length > 0) {
       try {
-        const res = await orderAPI.estimate({ items: newSelected.map((s) => ({ category: s.key, quantity: s.quantity })) });
+        // Kirim semua item dengan weightKg=10 (paket flat)
+        const res = await orderAPI.estimate({
+          items: newSelected.map((s) => ({ category: s.key, quantity: 1, weightKg: FLAT_KG }))
+        });
         setEstimate(res.data.data);
       } catch { setEstimate(null); }
     } else { setEstimate(null); }
@@ -98,7 +105,7 @@ export default function LandingPage() {
                 <button key={item.key} className={`item-chip ${selected.find(s => s.key === item.key) ? 'selected' : ''}`} onClick={() => toggleItem(item)}>
                   <span className="chip-icon">{item.icon}</span>
                   <span>{item.label}</span>
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{fmtCurrency(item.price)}</span>
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>~{FLAT_KG} kg · mulai Rp 200rb</span>
                 </button>
               ))}
             </div>
@@ -106,13 +113,25 @@ export default function LandingPage() {
               <div className="price-result">
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', flexWrap: 'wrap', gap: '12px' }}>
                   <div>
-                    <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '4px' }}>Estimasi Total</div>
+                    <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '4px' }}>Estimasi Total ({selected.length} jenis barang)</div>
                     <div className="total">{fmtCurrency(estimate.total)}</div>
                   </div>
                   <Link to="/register" className="btn btn-primary">Pesan Sekarang →</Link>
                 </div>
-                <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-                  Biaya dasar Rp 50.000 + barang {fmtCurrency(estimate.itemsTotal)}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>📦 Paket Standard ({FLAT_KG} kg × {selected.length} item)</span>
+                    <span>{fmtCurrency(FLAT_PRICE * selected.length)}</span>
+                  </div>
+                  {estimate.platformFee > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>🏷️ Biaya layanan (20%)</span>
+                      <span>{fmtCurrency(estimate.platformFee)}</span>
+                    </div>
+                  )}
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                    ✅ Termasuk jasa angkut dari dalam rumah · Kelebihan dari 10 kg dikenakan Rp 15.000/kg
+                  </div>
                 </div>
               </div>
             ) : (
